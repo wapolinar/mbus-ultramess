@@ -1,0 +1,431 @@
+diff -uraN mbus-test-org/main.c mbus-test/main.c
+--- mbus-test-org/main.c	2022-04-18 15:05:48.533172636 +0200
++++ mbus-test/main.c	2022-04-18 19:34:05.527536311 +0200
+@@ -569,7 +569,8 @@
+ 	struct termios old_tio, new_tio;
+ 	unsigned char c;
+ 	int error;
+-	allmess_zaehler zaehler;
++	allmess_zaehler zaehler = {0};
++	ultramess_zaehler ultramess = {0};
+ 
+ 
+ 	/* uint8_t tg[] = {0x68, 0x4D, 0x4D, 0x68, 0x08, 0x00, 0x72, 0x32, 0x00, 0x54, 0x17, 0x92, 0x26, 0x17, 0x04, 0x01, 0x00, 0x00, 0x00, 0x0C, 0x78, 0x32, 0x00, 0x54, 0x17, 0x04, 0x06, 0x16, 0x21, 0x00, 0x00, 0x0C, 0x14, 0x88, 0x09, 0x23, 0x00, 0x0B, 0x2D, 0x08, 0x00, 0x00, 0x0B, 0x3B, 0x39, 0x03, 0x00, 0x0A, 0x5A, 0x78, 0x02, 0x0A, 0x5E, 0x57, 0x02, 0x0B, 0x61, 0x11, 0x02, 0x00, 0x04, 0x6D, 0x06, 0x0C, 0x84, 0x21, 0x02, 0x27, 0x07, 0x04, 0x09, 0xFD, 0x0E, 0x07, 0x09, 0xFD, 0x0F, 0x11, 0x0F, 0x00, 0x00, 0xAD, 0x16};
+@@ -618,72 +619,73 @@
+ 
+ 	anleitung();
+ 
+-	while (1)
++	//while (1)
+ 	{
+ 		tcflush(fd, TCIOFLUSH); /* Discards old data in the tx and rx buffer */
+ 		mbus_bytes = 0;
+ 		memset(&mbus_tg, 0, sizeof(mbus_tg));
+ 
+-		c = getchar();
++		//c = getchar();
++		c = '3';
+ 
+-		if (c == 'q')
+-			break;
++		if (c == 'q') ;
++			//break;
+ 
+ 		if (c == 'h' || c == ' ')
+ 		{
+ 			anleitung();
+-			continue;
++			//continue;
+ 		}
+ 
+ 		if (c == '+')
+ 		{
+ 			init_size += 10;
+ 			printf("init_size = %d, time: %d ms\n", init_size, (int) (((float) init_size) * 4.1666));
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == '-')
+ 		{
+ 			if (init_size > 10)
+ 				init_size -= 10;
+ 			printf("init_size = %d, time: %d ms\n", init_size, (int) (((float) init_size) * 4.1666));
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 'a')
+ 		{
+ 			init_pause += 10;
+ 			printf("init_pause = %d ms\n", init_pause);
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 'y')
+ 		{
+ 			if (init_pause > 10)
+ 				init_pause -= 10;
+ 			printf("init_pause = %d ms\n", init_pause);
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 's')
+ 		{
+ 			prim_adr += 1;
+ 			printf("prim_adr = 0x%02X\n", prim_adr);
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 'x')
+ 		{
+ 			prim_adr -= 1;
+ 			printf("prim_adr = 0x%02X\n", prim_adr);
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 'd')
+ 		{
+ 			frame += 1;
+ 			printf("frame = 0x%02X\n", frame);
+-			continue;
++			//continue;
+ 		}
+ 		else if (c == 'c')
+ 		{
+ 			frame -= 1;
+ 			printf("frame = 0x%02X\n", frame);
+-			continue;
++			//continue;
+ 		}
+ 
+ 		if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'x'))
+@@ -692,11 +694,11 @@
+ 
+ 			if (mbus_bytes > 0)
+ 			{
+-				error = mbus_parse_telegram(mbus_tg, mbus_bytes, &zaehler);
++				error = mbus_parse_telegram(mbus_tg, mbus_bytes, &zaehler, &ultramess);
+ 				if (error < 0)
+ 					printf("Error: %d\n", error);
+ 				else
+-					mbus_print(&zaehler);
++					mbus_print(&zaehler, &ultramess);
+ 			}
+ 		}
+ 
+diff -uraN mbus-test-org/mbus.c mbus-test/mbus.c
+--- mbus-test-org/mbus.c	2022-04-18 15:05:48.503175550 +0200
++++ mbus-test/mbus.c	2022-04-18 19:24:50.815320090 +0200
+@@ -8,7 +8,7 @@
+ #include "mbus.h"
+ #include "mbus-decode.h"
+ 
+-int mbus_parse_telegram(unsigned char* tg, uint8_t size, allmess_zaehler* z)
++int mbus_parse_telegram(unsigned char* tg, uint8_t size, allmess_zaehler* z, ultramess_zaehler* u)
+ {
+ 	int i, length, sum = 0;
+ 
+@@ -71,21 +71,27 @@
+ 		printf("variable Antwort, fixed header 12 Bytes\n");
+ 
+ 		z->customer_number = mbus_data_bcd_decode(&(tg[7]), 4);
++		u->customer_number = mbus_data_bcd_decode(&(tg[7]), 4);
+ 		mbus_decode_manufacturer(z->manufacturer, tg[11], tg[12]);
++		mbus_decode_manufacturer(u->manufacturer, tg[11], tg[12]);
+ 		z->generation = tg[13];
+ 		z->medium = tg[14];
++		u->medium = tg[14];
+ 		z->reading_counter = tg[15];
++		u->reading_counter = tg[15];
+ 		z->error_code = tg[16];
++		u->error_code = tg[16];
+ 		z->signature = tg[18] << 8 | tg[17];
++		u->signature = tg[18] << 8 | tg[17];
+ 
+ 		unsigned char* data = &(tg[19]);
+-		return mbus_parse_variable_response(data, length - 3 - 12, z);
++		return mbus_parse_variable_response(data, length - 3 - 12, z, u);
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-int mbus_parse_variable_response(uint8_t* tg, uint8_t size, allmess_zaehler* z)
++int mbus_parse_variable_response(uint8_t* tg, uint8_t size, allmess_zaehler* z, ultramess_zaehler* u)
+ {
+ 	int i = 0, j;
+ 
+@@ -187,7 +193,7 @@
+ 		}
+ 
+ 		mbus_parse_function_field(&record);
+-		mbus_parse_unit(&record, z);
++		mbus_parse_unit(&record, z, u);
+ 
+ 		// jump over data for next dif
+ 		i += data_length;
+@@ -216,7 +222,7 @@
+ 	return 0;
+ }
+ 
+-int mbus_parse_unit(mbus_data_record* record, allmess_zaehler* z)
++int mbus_parse_unit(mbus_data_record* record, allmess_zaehler* z, ultramess_zaehler* u)
+ {
+ 	int n = 0;
+ 	uint8_t unit = record->unit;
+@@ -241,6 +247,15 @@
+ 			factor = pow(10.0, n - 3);
+ 			printf("\tresult: %d\tfactor %f\tn: %d\tneg %d\n", result, factor, n, neg);
+ 			z->energy = result * factor;
++			if (record->dif == 0x04 && record->vif == 0x06) {
++				// total energy
++				u->total_energy = result * factor;
++				printf("\tThis is the total energy up to now.");
++			} else if (record->dif == 0x44 && record->vif == 0x06) {
++				// last energy (usually end of last year)
++				u->last_energy = result * factor;
++				printf("\tThis is the energy at the end of last period.");
++			}
+ 			break;
+ 		case 0x08:
+ 		case 0x08 + 1:
+@@ -281,6 +296,15 @@
+ 			factor = pow(10.0, n - 3);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->power = result * (factor);
++			if (record->dif == 0x04 && record->vif == 0x2b) { 
++				// current power
++				printf("\tThis is the current power.");
++				u->power = result * (factor);
++			} else if (record->dif == 0x14 && record->vif == 0x2b) {
++				// max power
++				printf("\tThis is the max power.");
++				u->max_power = result * (factor);
++			}
+ 			break;
+ 		case 0x30:
+ 		case 0x30 + 1:
+@@ -309,6 +333,15 @@
+ 			factor = pow(10.0, n - 6);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->volume = result * (factor * 1000);
++			if (record->dif == 0x04 && record->vif == 0x13) {
++				// total volume
++				printf("\tThis is the total volume.");
++				u->total_volume = result * (factor * 1000);
++			} else if (record->dif == 0x44 && record->vif == 0x13) {
++				// last volume
++				printf("\tThis is the total volume at the end of last period.");
++				u->last_volume = result * (factor * 1000);
++			}
+ 			break;
+ 		case 0x38:
+ 		case 0x38 + 1:
+@@ -325,6 +358,15 @@
+ 			factor = pow(10.0, n - 6);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->flow = result * (factor * 1000);
++			if (record->dif == 0x04 && record->vif == 0x3b) {
++				// current flow
++				printf("\tThis is the current flow.");
++				u->flow = result * (factor * 1000);
++			} else if (record->dif == 0x14 && record->vif == 0x3b) {
++				// maximum flow
++				printf("\tThis is the maximum flow.");
++				u->max_flow = result * (factor * 1000);
++			}
+ 			break;
+ 		case 0x40:
+ 		case 0x40 + 1:
+@@ -373,6 +415,11 @@
+ 			factor = pow(10.0, n - 3);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->supply_temp = result * (factor * 10);
++			if (record->dif == 0x02 && record->vif == 0x5b) {
++				// supply flow temperature
++				printf("\tThis is the supply temperature.");
++				u->supply_temp = result * (factor * 10);
++			}
+ 			break;
+ 		case 0x5C:
+ 		case 0x5C + 1:
+@@ -385,6 +432,11 @@
+ 			factor = pow(10.0, n - 3);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->return_temp = result * (factor * 10);
++			if (record->dif == 0x02 && record->vif == 0x5f) {
++				// return flow temperature
++				printf("\tThis is the return temperature.");
++				u->return_temp = result * (factor * 10);
++			}
+ 			break;
+ 		case 0x68:
+ 		case 0x68 + 1:
+@@ -447,7 +499,11 @@
+ 			result = mbus_parse_data_field(record);
+ 			printf("\tresult: %d\n", result);
+ 			z->operating_time = result;
+-
++			if (record->dif == 0x02 && record->vif == 0x23) {
++				// On time (days)
++				printf("\tThis is the on time (days).");
++				u->operating_time = result;
++			}
+ 			break;
+ 		case 0x6C:
+ 		case 0x6C + 1:
+@@ -462,6 +518,15 @@
+ 				printf("\tTime Point (date)\n");
+ 
+ 			mbus_data_tm_decode(&(z->date), record->value, record->value_size);
++			if (record->dif == 0x04 && record->vif == 0x6d) {
++				// current date
++				printf("\tThis is the current date.");
++				mbus_data_tm_decode(&(u->current_date), record->value, record->value_size);
++			} else if (record->dif == 0x42 && record->vif == 0x6c) {
++				// end date of last time period
++				printf("\tThis is the date of the last time period.");
++				mbus_data_tm_decode(&(u->last_date), record->value, record->value_size);
++			}
+ 			break;
+ 		case 0x60:
+ 		case 0x60 + 1:
+@@ -474,7 +539,11 @@
+ 			factor = pow(10.0, n - 3);
+ 			printf("\tresult: %d\tfactor %f\n", result, factor);
+ 			z->temp_difference = result * (factor * 100);
+-
++			if (record->dif == 0x02 && record->vif == 0x61) {
++				// temp difference in K
++				printf("\tThis is the temperature difference in K.");
++				u->temp_diff = result * (factor * 100);
++			}
+ 			break;
+ 		case 0x64:
+ 		case 0x64 + 1:
+@@ -502,6 +571,7 @@
+ 			result = mbus_parse_data_field(record);
+ 			printf("\tresult: %d\n", result);
+ 			z->fabrication_number = result;
++			u->fabrication_number = result;
+ 			break;
+ 		case 0x7A:
+ 			// Bus Address
+@@ -772,7 +842,7 @@
+ 	return buff;
+ }
+ 
+-void mbus_print(allmess_zaehler* z)
++void mbus_print(allmess_zaehler* z, ultramess_zaehler* u)
+ {
+ 	printf("-------------------------------------------------\n");
+ 	printf("primary_address:\t0x%02X\n", z->slave_primary_address);
+@@ -814,6 +884,48 @@
+ 	printf("alarm_code:\t\t%d\n", z->alarm_code);
+ 
+ 	printf("-------------------------------------------------\n");
++	
++	printf("-----------------ULTRAMESS--------------------------------\n");
++	printf("customer_number:\t%d\n", u->customer_number);
++	printf("manufacturer:\t\t%s\n", u->manufacturer);
+ 
+-}
++	printf("medium:\t\t\t%d\t", u->medium);
++	if (u->medium == 0x04)
++		printf(" = Wärme");
++	printf("\n");
+ 
++	printf("reading_counter:\t%d\n", u->reading_counter);
++
++	printf("error_code:\t\t%d\n", u->error_code);
++	if (u->error_code & _BV(2))
++		printf("\tBit 2:\t Batterie leer\n");
++	if (u->error_code & _BV(3))
++		printf("\tBit 3:\t Permanenter Fehler\n");
++	if (u->error_code & _BV(4))
++		printf("\tBit 4:\t Temporärer Fehler\n");
++
++	printf("signature:\t\t%d\n", u->signature);
++	printf("fabrication_number:\t%d\n", u->fabrication_number);
++	printf("total energy:\t\t\t%d kWh\n", u->total_energy);
++	printf("total volume:\t\t\t%d l\n", u->total_volume);
++	printf("current power:\t\t\t%d W\n", u->power);
++	printf("current flow:\t\t\t%d l/h\n", u->flow);
++	printf("max power:\t\t\t%d W\n", u->max_power);
++	printf("max flow:\t\t\t%d l/h\n", u->max_flow);
++	printf("supply_temp:\t\t%0.1f °C\n", (float) u->supply_temp / 10.0);
++	printf("return_temp:\t\t%0.1f °C\n", (float) u->return_temp / 10.0);
++	printf("temp_difference:\t%0.2f K\n", (float) u->temp_diff / 100.0);
++
++	printf("current date:\t\t\t%02d.%02d.%d\n", u->current_date.tm_mday, u->current_date.tm_mon + 1, u->current_date.tm_year + 1900);
++	printf("current time:\t\t\t%02d:%02d:%02d\n", u->current_date.tm_hour, u->current_date.tm_min, u->current_date.tm_sec);
++
++	
++	printf("end date of last period:\t\t\t%02d.%02d.%d\n", u->last_date.tm_mday, u->last_date.tm_mon + 1, u->last_date.tm_year + 1900);
++	printf("end time of last period:\t\t\t%02d:%02d:%02d\n", u->last_date.tm_hour, u->last_date.tm_min, u->last_date.tm_sec);
++	printf("energy at end of last period:\t\t\t%d kWh\n", u->last_energy);
++	printf("volume at end of last period:\t\t\t%d l\n", u->last_volume);
++	printf("total operating_time:\t\t%d\n", u->operating_time);
++	printf("alarm_code:\t\t%d\n", u->alarm_code);
++
++	printf("-------------------------------------------------\n");
++}
+diff -uraN mbus-test-org/mbus.h mbus-test/mbus.h
+--- mbus-test-org/mbus.h	2022-04-18 15:05:48.503175550 +0200
++++ mbus-test/mbus.h	2022-04-18 18:10:20.577875355 +0200
+@@ -1,6 +1,36 @@
+ #ifndef _MBUS_H_
+ #define _MBUS_H_
+ 
++typedef struct _ultramess_zaehler
++{
++	uint32_t customer_number;
++	char manufacturer[4];
++	uint8_t generation;
++	uint8_t medium;
++	uint8_t reading_counter;
++	uint8_t error_code;
++	uint16_t signature;
++
++	uint32_t fabrication_number;
++	uint32_t total_energy;		// kWh
++	uint32_t last_energy;		// kWh
++	uint32_t total_volume;		// l
++	uint32_t last_volume;		// l
++	uint32_t power;		// W
++	uint32_t max_power;		// W
++	uint16_t flow;			// l/h
++	uint16_t max_flow;			// l/h
++	uint16_t supply_temp;	// 0,1 °C
++	uint16_t return_temp;	// 0,1 °C
++	uint16_t temp_diff;	// 0,01 K
++
++	struct tm current_date;
++	struct tm last_date;
++	uint16_t operating_time;	// days
++
++	uint16_t alarm_code;
++} ultramess_zaehler;
++
+ typedef struct _allmess_zaehler
+ {
+ 	uint8_t slave_primary_address;
+@@ -522,15 +552,15 @@
+ #define MBUS_VARIABLE_VIFE_FIRMWARE_VERSION	0x0E
+ #define MBUS_VARIABLE_VIFE_SOFTWARE_VERSION	0x0F
+ 
+-int mbus_parse_telegram(unsigned char* tg, uint8_t size, allmess_zaehler* z);
+-int mbus_parse_variable_response(unsigned char* tg, uint8_t size, allmess_zaehler* z);
++int mbus_parse_telegram(unsigned char* tg, uint8_t size, allmess_zaehler* z, ultramess_zaehler* u);
++int mbus_parse_variable_response(unsigned char* tg, uint8_t size, allmess_zaehler* z, ultramess_zaehler* u);
+ int mbus_parse_function_field(mbus_data_record* record);
+-int mbus_parse_unit(mbus_data_record* record, allmess_zaehler* z);
++int mbus_parse_unit(mbus_data_record* record, allmess_zaehler* z, ultramess_zaehler* u);
+ 
+ uint32_t mbus_parse_data_field(mbus_data_record* record);
+ unsigned char mbus_dif_datalength_lookup(unsigned char dif);
+ const char* mbus_unit_prefix(int exp);
+-void mbus_print(allmess_zaehler* z);
++void mbus_print(allmess_zaehler* z, ultramess_zaehler* u);
+ 
+ #endif /* _MBUS_H_ */
+ 
